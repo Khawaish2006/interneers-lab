@@ -140,7 +140,9 @@ These are the essential tools you need:
 
 ## Setting Up the Project
 
-### Create a Python Virtual Environment
+**Do these steps in order:** 1) create the virtual environment, 2) activate it, 3) install dependencies. Skipping step 1–2 can cause `pip install` to use the wrong Python or fail (e.g. Django 6 needs Python 3.12+).
+
+### 1. Create a Python Virtual Environment
 
 The python virtual env should be created inside the `backend/python` directory. Run the following commands:
 
@@ -149,7 +151,7 @@ cd backend/python
 python3 -m venv venv
 ```
 
-To activate the virtual environment:
+### 2. Activate the Virtual Environment
 
 ```bash
 # macOS/Linux
@@ -161,15 +163,17 @@ Set-ExecutionPolicy RemoteSigned -Scope CurrentUser
 .\venv\Scripts\activate
 ```
 
-### Install Python Dependencies
+### 3. Install Python Dependencies
+
+**Only after the venv is activated**, run:
 
 ```bash
 pip install --upgrade pip
-pip3 install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 By default, **requirements.txt** includes:
-- **Django** 6.0.2
+- **Django** (5.2.x or 6.x depending on your Python version; 6.x requires Python 3.12+)
 - **pymongo** 4.16.0 (MongoDB driver)
 
 **Check your `.gitignore`**
@@ -220,7 +224,7 @@ MongoDB is now running on `localhost:27019`. Connect using `root` / `example` or
 ## Verification of Installation
 
 - **Python**: `python3 --version` (should be 3.12+)
-- **Django**: `python -c "import django; print(django.get_version())"` (should be 6.0.2)
+- **Django**: `python -c "import django; print(django.get_version())"` (e.g. 5.2.x or 6.x)
 - **Docker**: `docker --version`
 - **Docker Compose**: `docker compose version`
 
