@@ -1,24 +1,69 @@
+# products/repository.py
 from datetime import datetime, timezone
 from .models import Product
+from .category_model import ProductCategory
+
 
 def _now():
-    """Returns current UTC time"""
     return datetime.now(timezone.utc)
+
 
 class ProductRepository:
 
     @staticmethod
     def create(product_data: dict) -> Product:
-        now = _now()
-        product_data["created_at"] = now   # set once
-        product_data["updated_at"] = now   # same as created_at initially
+        product_data["created_at"] = _now()
+        product_data["updated_at"] = _now()
         product = Product(**product_data)
         product.save()
         return product
 
     @staticmethod
-    def get_all() -> list:
-        return list(Product.objects.all())
+    def bulk_create(products_data: list) -> list:
+        """Create multiple products at once"""
+        created = []
+        for data in products_data:
+            data["created_at"] = _now()
+            data["updated_at"] = _now()
+            product = Product(**data)
+            product.save()
+            created.append(product)
+        return created
+
+    @staticmethod
+    def get_all(filters: dict = None) -> list:
+        """Get all products with optional filters"""
+        queryset = Product.objects
+
+        if filters:
+            # filter by category id
+            if "category" in filters:
+                queryset = queryset.filter(category=filters["category"])
+            # filter by brand
+            if "brand" in filters:
+                queryset = queryset.filter(brand__icontains=filters["brand"])
+            # filter by min price
+            if "min_price" in filters:
+                queryset = queryset.filter(price__gte=filters["min_price"])
+            # filter by max price
+            if "max_price" in filters:
+                queryset = queryset.filter(price__lte=filters["max_price"])
+
+        return list(queryset.all())
+
+    @staticmethod
+    def get_all_sorted(sort: str, filters: dict = None) -> list:
+        queryset = Product.objects
+        if filters:
+            if "category" in filters:
+                queryset = queryset.filter(category=filters["category"])
+            if "brand" in filters:
+                queryset = queryset.filter(brand__icontains=filters["brand"])
+        if sort == "newest":
+            return list(queryset.order_by("-created_at"))
+        elif sort == "oldest":
+            return list(queryset.order_by("created_at"))
+        return list(queryset.all())
 
     @staticmethod
     def get_by_id(product_id: str):
@@ -28,10 +73,14 @@ class ProductRepository:
             return None
 
     @staticmethod
+    def get_by_category(category) -> list:
+        return list(Product.objects.filter(category=category))
+
+    @staticmethod
     def update(product: Product, fields: dict) -> Product:
         for key, value in fields.items():
             setattr(product, key, value)
-        product.updated_at = _now()    # always update this on every change
+        product.updated_at = _now()
         product.save()
         return product
 
@@ -39,20 +88,8 @@ class ProductRepository:
     def delete(product: Product) -> None:
         product.delete()
 
-    # ── NEW METHODS using audit columns ──────────────────────
-
-    @staticmethod
-    def get_all_sorted(sort: str) -> list:
-        """Sort products by created_at"""
-        if sort == "newest":
-            return list(Product.objects.order_by("-created_at"))  # - means descending
-        elif sort == "oldest":
-            return list(Product.objects.order_by("created_at"))   # ascending
-        return list(Product.objects.all())
-
     @staticmethod
     def get_recently_updated(days: int = 7) -> list:
-        """Get products updated in the last N days"""
         from datetime import timedelta
         cutoff = _now() - timedelta(days=days)
         return list(Product.objects.filter(updated_at__gte=cutoff))

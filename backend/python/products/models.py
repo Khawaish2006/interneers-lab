@@ -5,32 +5,46 @@ from mongoengine import (
     DecimalField,
     IntField,
     DateTimeField,
+    ReferenceField,    # ← NEW — links to another document
+    CASCADE            # ← NEW — what happens when category is deleted
 )
+from datetime import datetime, timezone
+from .category_model import ProductCategory
+
 
 class Product(Document):
-    """
-    MongoDB Document for Product.
-    Each instance = one document in the 'products' collection.
-    """
     name = StringField(required=True, max_length=200)
     description = StringField(default="")
-    category = StringField(required=True, max_length=100)
+
+    # ReferenceField links Product to ProductCategory
+    # instead of storing "Electronics" (string),
+    # it stores the ID of the Electronics category document
+    category = ReferenceField(ProductCategory, required=True)
+
     price = DecimalField(required=True, precision=2, min_value=0.01)
     brand = StringField(required=True, max_length=100)
     quantity_in_warehouse = IntField(default=0, min_value=0)
-    created_at = DateTimeField()    # set once when product is created
-    updated_at = DateTimeField() 
+    created_at = DateTimeField()
+    updated_at = DateTimeField()
+
     meta = {
-        'collection': 'products'   # name of collection in MongoDB
+        'collection': 'products'
     }
 
     def to_dict(self):
-        """Convert to JSON-serializable dictionary"""
+        # category is now a full object, not just a string
+        category_data = None
+        if self.category:
+            try:
+                category_data = self.category.to_dict()
+            except Exception:
+                category_data = {"id": str(self.category.id)}
+
         return {
-            "id": str(self.id),    # MongoDB _id converted to string
+            "id": str(self.id),
             "name": self.name,
             "description": self.description,
-            "category": self.category,
+            "category": category_data,
             "price": str(self.price),
             "brand": self.brand,
             "quantity_in_warehouse": self.quantity_in_warehouse,

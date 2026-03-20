@@ -1,18 +1,12 @@
-"""
-Controller layer — only handles HTTP request/response.
-No business logic here. All logic lives in services.py.
-"""
 import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_http_methods
-
 from .services import ProductService
 from .schemas import CreateProductRequest, UpdateProductRequest, ProductResponse
 
 
 def _parse_body(request):
-    """Parse JSON body from request. Returns (data, error)."""
     try:
         return json.loads(request.body.decode("utf-8")), None
     except Exception:
@@ -35,13 +29,25 @@ def product_create(request):
 
 @require_http_methods(["GET"])
 def product_list(request):
-    # ?sort=newest or ?sort=oldest from the URL
     sort = request.GET.get("sort", None)
-    products = ProductService.get_all_products(sort=sort)
+
+    # collect filters from query params
+    filters = {}
+    if request.GET.get("category"):
+        filters["category"] = request.GET.get("category")
+    if request.GET.get("brand"):
+        filters["brand"] = request.GET.get("brand")
+    if request.GET.get("min_price"):
+        filters["min_price"] = float(request.GET.get("min_price"))
+    if request.GET.get("max_price"):
+        filters["max_price"] = float(request.GET.get("max_price"))
+
+    products = ProductService.get_all_products(sort=sort, filters=filters)
     return JsonResponse({
         "count": len(products),
         "products": [ProductResponse.from_product(p).to_dict() for p in products]
     })
+
 
 @require_http_methods(["GET"])
 def product_get(request, product_id):
@@ -51,15 +57,6 @@ def product_get(request, product_id):
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=404)
 
-@require_http_methods(["GET"])
-def recently_updated(request):
-    # ?days=7 from the URL, default is 7
-    days = int(request.GET.get("days", 7))
-    products = ProductService.get_recently_updated(days=days)
-    return JsonResponse({
-        "count": len(products),
-        "products": [ProductResponse.from_product(p).to_dict() for p in products]
-    })
 
 @csrf_exempt
 @require_http_methods(["PUT", "PATCH"])
@@ -85,4 +82,36 @@ def product_delete(request, product_id):
         return JsonResponse({"message": "Product deleted successfully"})
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=404)
-    
+
+
+@require_http_methods(["GET"])
+def recently_updated(request):
+    days = int(request.GET.get("days", 7))
+    products = ProductService.get_recently_updated(days=days)
+    return JsonResponse({
+        "count": len(products),
+        "products": [ProductResponse.from_product(p).to_dict() for p in products]
+    })
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def bulk_create(request):
+    """Accept a CSV file and create multiple products"""
+    try:
+        # get the uploaded file
+        csv_file = request.FILES.get("file")
+        if not csv_file:
+            return JsonResponse({"error": "No CSV file provided"}, status=400)
+
+        csv_content = csv_file.read().decode("utf-8")
+        results = ProductService.bulk_create_from_csv(csv_content)
+
+        return JsonResponse({
+            "created_count": len(results["created"]),
+            "error_count": len(results["errors"]),
+            "created": results["created"],
+            "errors": results["errors"]
+        }, status=201)
+    except Exception as e:
+        return JsonResponse({"error": str(e)}, status=400)

@@ -4,15 +4,10 @@ from decimal import Decimal
 from typing import Optional
 
 
-# ─── REQUEST MODELS (data coming IN) ──────────────────────────
+# ── REQUEST MODELS ────────────────────────────────────────────
 
 @dataclass
 class CreateProductRequest:
-    """
-    Shape of data expected when creating a product.
-    NO timestamps here — user should never send these.
-    Timestamps are set automatically in the repository.
-    """
     name: str
     category: str
     price: Decimal
@@ -34,11 +29,6 @@ class CreateProductRequest:
 
 @dataclass
 class UpdateProductRequest:
-    """
-    Shape of data expected when updating a product.
-    All fields optional — user only sends what they want to change.
-    NO timestamps here — updated_at is set automatically in repository.
-    """
     name: Optional[str] = None
     category: Optional[str] = None
     price: Optional[Decimal] = None
@@ -58,7 +48,6 @@ class UpdateProductRequest:
         )
 
     def to_dict(self):
-        """Return only fields that were actually provided (not None)"""
         return {
             k: v for k, v in {
                 "name": self.name,
@@ -71,36 +60,40 @@ class UpdateProductRequest:
         }
 
 
-# ─── RESPONSE MODELS (data going OUT) ─────────────────────────
+# ── RESPONSE MODEL ────────────────────────────────────────────
 
 @dataclass
 class ProductResponse:
-    """
-    Shape of data sent back in every API response.
-    Timestamps are included here because we SHOW them to the user.
-    """
     id: str
     name: str
-    category: str
+    category: dict        # ← changed from str to dict
     price: str
     brand: str
     description: str
     quantity_in_warehouse: int
-    created_at: str = None    # shown in response, set by system
-    updated_at: str = None    # shown in response, set by system
+    created_at: str = None
+    updated_at: str = None
 
     @classmethod
     def from_product(cls, product):
-        """Build a ProductResponse from a MongoEngine Product object"""
+        # safely convert category to dict
+        category_data = None
+        if product.category:
+            try:
+                # if category is a full object, call to_dict()
+                category_data = product.category.to_dict()
+            except Exception:
+                # if category is just an ID reference, return minimal info
+                category_data = {"id": str(product.category.id)}
+
         return cls(
             id=str(product.id),
             name=product.name,
-            category=product.category,
+            category=category_data,      # ← now a dict, not an object
             price=str(product.price),
             brand=product.brand,
             description=product.description,
             quantity_in_warehouse=product.quantity_in_warehouse,
-            # convert datetime to readable string, handle if None
             created_at=product.created_at.isoformat() if product.created_at else None,
             updated_at=product.updated_at.isoformat() if product.updated_at else None,
         )
@@ -109,7 +102,7 @@ class ProductResponse:
         return {
             "id": self.id,
             "name": self.name,
-            "category": self.category,
+            "category": self.category,   # ← already a dict, serializes fine
             "price": self.price,
             "brand": self.brand,
             "description": self.description,
