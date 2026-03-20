@@ -35,12 +35,13 @@ def product_create(request):
 
 @require_http_methods(["GET"])
 def product_list(request):
-    products = ProductService.get_all_products()
+    # ?sort=newest or ?sort=oldest from the URL
+    sort = request.GET.get("sort", None)
+    products = ProductService.get_all_products(sort=sort)
     return JsonResponse({
         "count": len(products),
         "products": [ProductResponse.from_product(p).to_dict() for p in products]
     })
-
 
 @require_http_methods(["GET"])
 def product_get(request, product_id):
@@ -50,6 +51,15 @@ def product_get(request, product_id):
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=404)
 
+@require_http_methods(["GET"])
+def recently_updated(request):
+    # ?days=7 from the URL, default is 7
+    days = int(request.GET.get("days", 7))
+    products = ProductService.get_recently_updated(days=days)
+    return JsonResponse({
+        "count": len(products),
+        "products": [ProductResponse.from_product(p).to_dict() for p in products]
+    })
 
 @csrf_exempt
 @require_http_methods(["PUT", "PATCH"])
@@ -75,3 +85,4 @@ def product_delete(request, product_id):
         return JsonResponse({"message": "Product deleted successfully"})
     except ValueError as e:
         return JsonResponse({"error": str(e)}, status=404)
+    

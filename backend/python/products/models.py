@@ -4,6 +4,7 @@ from mongoengine import (
     StringField,
     DecimalField,
     IntField,
+    DateTimeField,
 )
 
 class Product(Document):
@@ -17,7 +18,8 @@ class Product(Document):
     price = DecimalField(required=True, precision=2, min_value=0.01)
     brand = StringField(required=True, max_length=100)
     quantity_in_warehouse = IntField(default=0, min_value=0)
-
+    created_at = DateTimeField()    # set once when product is created
+    updated_at = DateTimeField() 
     meta = {
         'collection': 'products'   # name of collection in MongoDB
     }
@@ -31,5 +33,7 @@ class Product(Document):
             "category": self.category,
             "price": str(self.price),
             "brand": self.brand,
-            "quantity_in_warehouse": self.quantity_in_warehouse
+            "quantity_in_warehouse": self.quantity_in_warehouse,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
