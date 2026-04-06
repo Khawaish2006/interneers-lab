@@ -1,9 +1,17 @@
 from pathlib import Path
-import mongoengine
+import os
+
+from django.core.exceptions import ImproperlyConfigured
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+load_dotenv(BASE_DIR / ".env")
 
-SECRET_KEY = "setup key"
+SECRET_KEY = os.environ.get("SECRET_KEY")
+if not SECRET_KEY:
+    raise ImproperlyConfigured(
+        "SECRET_KEY is missing. Copy .env.example to .env and set SECRET_KEY (see backend/python/.env.example)."
+    )
 
 DEBUG = True
 
@@ -44,10 +52,17 @@ DATABASES = {
     }
 }
 
-mongoengine.connect(
-    db="products_db",
-    host="mongodb://root:example@localhost:27019/products_db?authSource=admin"
-)
+_MONGO_URI = os.environ.get("MONGO_URI")
+if not _MONGO_URI:
+    raise ImproperlyConfigured(
+        "MONGO_URI is missing. Copy .env.example to .env and set MONGO_URI (see backend/python/.env.example)."
+    )
+
+# Import after env is loaded so connect uses credentials from .env
+import mongoengine
+
+mongo_db_name = os.environ.get("MONGO_DB_NAME", "products_db")
+mongoengine.connect(db=mongo_db_name, host=_MONGO_URI)
 
 LANGUAGE_CODE = "en-us"
 TIME_ZONE = "UTC"

@@ -1,1 +1,4 @@
 .DS_Store
+
+# Local env with secrets (python backend)
+backend/python/.env
