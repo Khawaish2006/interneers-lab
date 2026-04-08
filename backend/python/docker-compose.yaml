@@ -2,7 +2,7 @@ services:
   mongodb:
     # Pin to 6.0 so existing Docker volumes (featureCompatibilityVersion 6.0) still work.
     # To use MongoDB 8: `docker compose down -v` (wipes data) then set image: mongo:8.0
-    image: mongo:6.0
+    image: mongo:8.0
     container_name: interneers_lab_2026_mongodb
     ports:
       - '27019:27017'
