@@ -123,6 +123,46 @@ else:
 
 st.markdown("---")
 
+# ─── CREATE CATEGORY ───────────────────────────────────────────
+st.subheader("🗂️ Add New Category")
+
+with st.form("add_category_form"):
+    col1, col2 = st.columns(2)
+
+    with col1:
+        new_category_title = st.text_input("Category Name *")
+    with col2:
+        new_category_description = st.text_area("Description")
+
+    category_submitted = st.form_submit_button("Add Category")
+
+    if category_submitted:
+        if not new_category_title:
+            st.error("Category name is required!")
+        else:
+            try:
+                from datetime import datetime, timezone
+                now = datetime.now(timezone.utc)
+
+                # Check if category already exists
+                existing = ProductCategory.objects(title=new_category_title).first()
+                if existing:
+                    st.error(f"❌ Category '{new_category_title}' already exists!")
+                else:
+                    category = ProductCategory(
+                        title=new_category_title,
+                        description=new_category_description,
+                        created_at=now,
+                        updated_at=now
+                    )
+                    category.save()
+                    st.success(f"✅ Category '{new_category_title}' added successfully!")
+                    st.rerun()
+            except Exception as e:
+                st.error(f"Error adding category: {e}")
+
+st.markdown("---")
+
 # ─── TASK 3: ADD PRODUCT FORM ──────────────────────────────────
 st.subheader("➕ Add New Product")
 
@@ -192,3 +232,194 @@ else:
             st.rerun()
         except Exception as e:
             st.error(f"Error deleting product: {e}")
+
+st.markdown("---")
+
+# ─── ADVANCED: SCENARIO SELECTOR ───────────────────────────────
+st.subheader("🎯 AI Scenario Selector")
+st.markdown("Choose a warehouse scenario and let AI populate the database with relevant products!")
+
+# Scenario definitions — each has a description and stock range
+SCENARIOS = {
+    "🎄 Holiday Rush": {
+        "description": "Festive season — high demand for gifts, decorations, and party items",
+        "stock_min": 300,
+        "stock_max": 500,
+        "prompt_hint": "festive holiday season products like gifts, decorations, party supplies, winter clothing, and electronics"
+    },
+    "☀️ Summer Collection": {
+        "description": "Summer season — outdoor, cooling, and seasonal products",
+        "stock_min": 200,
+        "stock_max": 400,
+        "prompt_hint": "summer season products like light clothing, outdoor gear, cooling appliances, summer foods and beverages"
+    },
+    "📚 Back to School": {
+        "description": "School season — stationery, books, electronics, and essentials",
+        "stock_min": 150,
+        "stock_max": 350,
+        "prompt_hint": "back to school products like books, stationery, bags, electronics like laptops and calculators, and school essentials"
+    },
+    "🎆 New Year Sale": {
+        "description": "New Year — discounted items, party supplies, and fresh start products",
+        "stock_min": 250,
+        "stock_max": 450,
+        "prompt_hint": "new year sale products like party supplies, fitness equipment, kitchen appliances, and lifestyle products"
+    },
+}
+
+# Scenario dropdown
+selected_scenario = st.selectbox(
+    "Select a Scenario",
+    list(SCENARIOS.keys())
+)
+
+# Show scenario description
+scenario_info = SCENARIOS[selected_scenario]
+st.info(f"📌 {scenario_info['description']}")
+st.markdown(f"**Stock levels will be:** {scenario_info['stock_min']} – {scenario_info['stock_max']} units")
+
+# Number of products to generate
+num_products = st.slider("How many products to generate?", min_value=5, max_value=30, value=10)
+
+# Generate button
+if st.button("🚀 Generate & Save Products", type="primary"):
+    try:
+        from groq import Groq
+        from dotenv import load_dotenv
+        from pydantic import BaseModel, field_validator
+        from typing import Optional
+        from datetime import datetime, timezone
+        import os
+        import json
+
+        load_dotenv()
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+
+        # Fetch categories from MongoDB
+        all_categories = get_all_categories()
+        category_map = {cat.title: cat for cat in all_categories}
+        category_names = list(category_map.keys())
+
+        # Build prompt
+        prompt = f"""
+Generate exactly {num_products} realistic warehouse products for a "{selected_scenario.replace('🎄 ', '').replace('☀️ ', '').replace('📚 ', '').replace('🎆 ', '')}" scenario as a JSON array.
+
+Focus on: {scenario_info['prompt_hint']}
+
+Each product must belong to one of these categories only: {category_names}
+
+Each product must have exactly these fields:
+- name: string (specific product name e.g. "Samsung 4K TV 55 inch")
+- description: string (1-2 sentence product description)
+- category: string (must be exactly one of: {category_names})
+- price: float (realistic price with 2 decimal places, min 0.01)
+- brand: string (realistic brand name)
+- quantity_in_warehouse: integer (between {scenario_info['stock_min']} and {scenario_info['stock_max']} — high stock for this scenario!)
+
+Rules:
+- Return ONLY a valid JSON array, no explanation, no markdown, no extra text
+"""
+
+        with st.spinner("🤖 AI is generating products..."):
+            response = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.7
+            )
+
+        raw_output = response.choices[0].message.content
+
+        # Clean response
+        cleaned = raw_output.strip()
+        if cleaned.startswith("```json"):
+            cleaned = cleaned[7:]
+        if cleaned.startswith("```"):
+            cleaned = cleaned[3:]
+        if cleaned.endswith("```"):
+            cleaned = cleaned[:-3]
+        cleaned = cleaned.strip()
+
+        products_data = json.loads(cleaned)
+
+        # ── Pydantic validation ──────────────────────────────
+        class ProductSchema(BaseModel):
+            name: str
+            description: Optional[str] = ""
+            category: str
+            price: float
+            brand: str
+            quantity_in_warehouse: int
+
+            @field_validator('price')
+            def price_must_be_positive(cls, v):
+                if v <= 0:
+                    raise ValueError("Price must be greater than 0")
+                return round(v, 2)
+
+            @field_validator('quantity_in_warehouse')
+            def quantity_must_be_non_negative(cls, v):
+                if v < 0:
+                    raise ValueError("Quantity cannot be negative")
+                return v
+
+            @field_validator('category')
+            def category_must_exist(cls, v):
+                if v not in category_names:
+                    raise ValueError(f"Invalid category: {v}")
+                return v
+
+        valid_products = []
+        invalid_count = 0
+
+        for product in products_data:
+            try:
+                validated = ProductSchema(**product)
+                valid_products.append(validated)
+            except Exception:
+                invalid_count += 1
+
+        # ── Save to MongoDB ──────────────────────────────────
+        saved = 0
+        now = datetime.now(timezone.utc)
+
+        for vp in valid_products:
+            try:
+                category_obj = category_map.get(vp.category)
+                if not category_obj:
+                    continue
+                Product(
+                    name=vp.name,
+                    description=vp.description,
+                    category=category_obj,
+                    price=vp.price,
+                    brand=vp.brand,
+                    quantity_in_warehouse=vp.quantity_in_warehouse,
+                    created_at=now,
+                    updated_at=now
+                ).save()
+                saved += 1
+            except Exception:
+                invalid_count += 1
+
+        # ── Show results ─────────────────────────────────────
+        st.success(f"🎉 Successfully saved {saved} products for '{selected_scenario}' scenario!")
+
+        if invalid_count > 0:
+            st.warning(f"⚠️ {invalid_count} products were skipped due to validation errors.")
+
+        # Show preview of generated products
+        st.markdown("### 📋 Generated Products Preview:")
+        preview_data = []
+        for vp in valid_products:
+            preview_data.append({
+                "Name": vp.name,
+                "Category": vp.category,
+                "Brand": vp.brand,
+                "Price (₹)": vp.price,
+                "Stock": vp.quantity_in_warehouse,
+            })
+        st.dataframe(pd.DataFrame(preview_data), use_container_width=True, hide_index=True)
+        st.info("🔄 Click 'Refresh Data' in the sidebar to see all products updated in the table above!")
+
+    except Exception as e:
+        st.error(f"❌ Something went wrong: {e}")
