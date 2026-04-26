@@ -4,6 +4,7 @@
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 import sys
 from pathlib import Path
 
@@ -17,6 +18,53 @@ connect_to_mongodb()
 # Import models directly
 from products.models import Product
 from products.category_model import ProductCategory
+
+# ─── SEMANTIC SEARCH SETUP ─────────────────────────────────────
+from sentence_transformers import SentenceTransformer
+
+@st.cache_resource
+def load_model(model_name="all-MiniLM-L6-v2"):
+    """Load sentence transformer model — cached so it only loads once"""
+    return SentenceTransformer(model_name)
+
+@st.cache_data
+def load_product_embeddings(model_name="all-MiniLM-L6-v2"):
+    """Fetch all products and generate embeddings — cached"""
+    _model = load_model(model_name)
+    all_products = list(Product.objects.all())
+    texts, names, descriptions, categories, brands, prices, stocks = [], [], [], [], [], [], []
+
+    for p in all_products:
+        try:
+            cat = p.category.title if p.category else ""
+        except:
+            cat = ""
+        text = f"{p.name}. Category: {cat}. {p.description}"
+        texts.append(text)
+        names.append(p.name)
+        descriptions.append(p.description)
+        categories.append(cat)
+        brands.append(p.brand)
+        prices.append(float(str(p.price)))
+        stocks.append(p.quantity_in_warehouse)
+
+    embeddings = _model.encode(texts)
+    return names, descriptions, categories, brands, prices, stocks, embeddings
+
+def cosine_similarity(vec1, vec2):
+    dot = np.dot(vec1, vec2)
+    mag = np.linalg.norm(vec1) * np.linalg.norm(vec2)
+    return float(dot / mag) if mag != 0 else 0.0
+
+def semantic_search(query, embeddings, names, top_k=5, model_name="all-MiniLM-L6-v2"):
+    """Search products by semantic similarity"""
+    _model = load_model(model_name)
+    query_vec = _model.encode([query])[0]
+    scores = [(names[i], cosine_similarity(query_vec, embeddings[i])) for i in range(len(names))]
+    scores.sort(key=lambda x: x[1], reverse=True)
+    # Filter out results below minimum threshold
+    scores = [s for s in scores if s[1] >= 0.35]
+    return scores[:top_k]
 
 # ─── PAGE CONFIG ───────────────────────────────────────────────
 st.set_page_config(
@@ -63,6 +111,7 @@ st.sidebar.markdown("---")
 
 # Refresh button
 if st.sidebar.button("🔄 Refresh Data"):
+    st.cache_data.clear()
     st.rerun()
 
 # Filter by category
@@ -123,6 +172,104 @@ else:
 
 st.markdown("---")
 
+# ─── TASK 5: SEMANTIC SEARCH ───────────────────────────────────
+st.subheader("🧠 Semantic Search")
+st.markdown("Search products by **meaning** — not just keywords!")
+
+
+semantic_query = st.text_input(
+        "Search query",
+        placeholder="e.g. 'wireless audio device', 'something to wear', 'mobile phone'"
+    )
+
+
+if semantic_query:
+    with st.spinner("🔍 Searching..."):
+        names, descriptions, categories_list, brands, prices, stocks, embeddings = load_product_embeddings()
+        results = semantic_search(semantic_query, embeddings, names, top_k=100)
+
+    st.markdown(f"**Results for:** *'{semantic_query}'*")
+
+    result_data = []
+    for rank, (name, score) in enumerate(results, 1):
+        idx = names.index(name)
+        result_data.append({
+            "Rank": rank,
+            "Name": name,
+            "Category": categories_list[idx],
+            "Brand": brands[idx],
+            "Price (₹)": prices[idx],
+            "Stock": stocks[idx],
+            "Similarity Score": round(score, 4)
+        })
+
+    result_df = pd.DataFrame(result_data)
+    st.dataframe(result_df, use_container_width=True, hide_index=True)
+    st.caption("💡 Similarity Score: closer to 1.0 = more relevant to your query")
+
+st.markdown("---")
+
+# ─── ADVANCED 1: FIND SIMILAR PRODUCTS ─────────────────────────
+st.subheader("🔁 Find Similar Products")
+st.markdown("Select any product and find the most similar items in your inventory!")
+
+all_product_names = df["Name"].tolist() if not df.empty else []
+
+if all_product_names:
+    selected_product_name = st.selectbox(
+        "Select a product",
+        all_product_names,
+        key="similar_product_select"
+    )
+    
+
+    if st.button("🔍 Find Similar Products"):
+        with st.spinner("Finding similar products..."):
+            names, descriptions, categories_list, brands, prices, stocks, embeddings = load_product_embeddings()
+
+            if selected_product_name in names:
+                idx = names.index(selected_product_name)
+                selected_vec = embeddings[idx]
+
+                # Calculate similarity with all other products
+                similarities = []
+                for i, name in enumerate(names):
+                    if name != selected_product_name:
+                        score = cosine_similarity(selected_vec, embeddings[i])
+                        similarities.append((name, score, i))
+
+                # Sort by score
+                similarities.sort(key=lambda x: x[1], reverse=True)
+                similarities = [s for s in similarities if s[1] >= 0.5]
+                top_similar = similarities[:50]
+
+                st.markdown(f"**Products similar to:** *{selected_product_name}*")
+
+                similar_data = []
+                for rank, (name, score, i) in enumerate(top_similar, 1):
+                    similar_data.append({
+                        "Rank": rank,
+                        "Name": name,
+                        "Category": categories_list[i],
+                        "Brand": brands[i],
+                        "Price (₹)": prices[i],
+                        "Stock": stocks[i],
+                        "Similarity Score": round(score, 4)
+                    })
+
+                st.dataframe(
+                    pd.DataFrame(similar_data),
+                    use_container_width=True,
+                    hide_index=True
+                )
+                st.caption("💡 Higher similarity score = more similar to your selected product")
+            else:
+                st.warning("Product not found in embeddings. Try refreshing!")
+else:
+    st.info("No products available.")
+
+st.markdown("---")
+
 # ─── CREATE CATEGORY ───────────────────────────────────────────
 st.subheader("🗂️ Add New Category")
 
@@ -144,7 +291,6 @@ with st.form("add_category_form"):
                 from datetime import datetime, timezone
                 now = datetime.now(timezone.utc)
 
-                # Check if category already exists
                 existing = ProductCategory.objects(title=new_category_title).first()
                 if existing:
                     st.error(f"❌ Category '{new_category_title}' already exists!")
@@ -163,7 +309,7 @@ with st.form("add_category_form"):
 
 st.markdown("---")
 
-# ─── TASK 3: ADD PRODUCT FORM ──────────────────────────────────
+# ─── ADD PRODUCT FORM ──────────────────────────────────────────
 st.subheader("➕ Add New Product")
 
 with st.form("add_product_form"):
@@ -187,10 +333,8 @@ with st.form("add_product_form"):
             st.error("Name and Brand are required!")
         else:
             try:
-                # Find the selected category object
                 category_obj = ProductCategory.objects.get(title=new_category)
 
-                # Create the product
                 from datetime import datetime, timezone
                 now = datetime.now(timezone.utc)
 
@@ -212,7 +356,7 @@ with st.form("add_product_form"):
 
 st.markdown("---")
 
-# ─── TASK 3: REMOVE PRODUCT ────────────────────────────────────
+# ─── REMOVE PRODUCT ────────────────────────────────────────────
 st.subheader("🗑️ Remove Product")
 
 if df.empty:
@@ -222,7 +366,6 @@ else:
     selected_product = st.selectbox("Select product to remove", product_options)
 
     if st.button("🗑️ Delete Selected Product", type="primary"):
-        # Extract ID from selection
         product_id = selected_product.split("(")[-1].replace(")", "").strip()
         try:
             product = Product.objects.get(id=product_id)
@@ -239,7 +382,6 @@ st.markdown("---")
 st.subheader("🎯 AI Scenario Selector")
 st.markdown("Choose a warehouse scenario and let AI populate the database with relevant products!")
 
-# Scenario definitions — each has a description and stock range
 SCENARIOS = {
     "🎄 Holiday Rush": {
         "description": "Festive season — high demand for gifts, decorations, and party items",
@@ -267,21 +409,12 @@ SCENARIOS = {
     },
 }
 
-# Scenario dropdown
-selected_scenario = st.selectbox(
-    "Select a Scenario",
-    list(SCENARIOS.keys())
-)
-
-# Show scenario description
+selected_scenario = st.selectbox("Select a Scenario", list(SCENARIOS.keys()))
 scenario_info = SCENARIOS[selected_scenario]
 st.info(f"📌 {scenario_info['description']}")
 st.markdown(f"**Stock levels will be:** {scenario_info['stock_min']} – {scenario_info['stock_max']} units")
-
-# Number of products to generate
 num_products = st.slider("How many products to generate?", min_value=5, max_value=30, value=10)
 
-# Generate button
 if st.button("🚀 Generate & Save Products", type="primary"):
     try:
         from groq import Groq
@@ -295,29 +428,22 @@ if st.button("🚀 Generate & Save Products", type="primary"):
         load_dotenv()
         client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
-        # Fetch categories from MongoDB
         all_categories = get_all_categories()
         category_map = {cat.title: cat for cat in all_categories}
         category_names = list(category_map.keys())
 
-        # Build prompt
         prompt = f"""
 Generate exactly {num_products} realistic warehouse products for a "{selected_scenario.replace('🎄 ', '').replace('☀️ ', '').replace('📚 ', '').replace('🎆 ', '')}" scenario as a JSON array.
-
 Focus on: {scenario_info['prompt_hint']}
-
 Each product must belong to one of these categories only: {category_names}
-
 Each product must have exactly these fields:
-- name: string (specific product name e.g. "Samsung 4K TV 55 inch")
-- description: string (1-2 sentence product description)
+- name: string
+- description: string (1-2 sentences)
 - category: string (must be exactly one of: {category_names})
-- price: float (realistic price with 2 decimal places, min 0.01)
-- brand: string (realistic brand name)
-- quantity_in_warehouse: integer (between {scenario_info['stock_min']} and {scenario_info['stock_max']} — high stock for this scenario!)
-
-Rules:
-- Return ONLY a valid JSON array, no explanation, no markdown, no extra text
+- price: float (min 0.01)
+- brand: string
+- quantity_in_warehouse: integer (between {scenario_info['stock_min']} and {scenario_info['stock_max']})
+Rules: Return ONLY a valid JSON array, no explanation, no markdown, no extra text
 """
 
         with st.spinner("🤖 AI is generating products..."):
@@ -328,8 +454,6 @@ Rules:
             )
 
         raw_output = response.choices[0].message.content
-
-        # Clean response
         cleaned = raw_output.strip()
         if cleaned.startswith("```json"):
             cleaned = cleaned[7:]
@@ -338,10 +462,8 @@ Rules:
         if cleaned.endswith("```"):
             cleaned = cleaned[:-3]
         cleaned = cleaned.strip()
-
         products_data = json.loads(cleaned)
 
-        # ── Pydantic validation ──────────────────────────────
         class ProductSchema(BaseModel):
             name: str
             description: Optional[str] = ""
@@ -378,7 +500,6 @@ Rules:
             except Exception:
                 invalid_count += 1
 
-        # ── Save to MongoDB ──────────────────────────────────
         saved = 0
         now = datetime.now(timezone.utc)
 
@@ -401,25 +522,15 @@ Rules:
             except Exception:
                 invalid_count += 1
 
-        # ── Show results ─────────────────────────────────────
         st.success(f"🎉 Successfully saved {saved} products for '{selected_scenario}' scenario!")
-
         if invalid_count > 0:
             st.warning(f"⚠️ {invalid_count} products were skipped due to validation errors.")
 
-        # Show preview of generated products
-        st.markdown("### 📋 Generated Products Preview:")
-        preview_data = []
-        for vp in valid_products:
-            preview_data.append({
-                "Name": vp.name,
-                "Category": vp.category,
-                "Brand": vp.brand,
-                "Price (₹)": vp.price,
-                "Stock": vp.quantity_in_warehouse,
-            })
+        preview_data = [{"Name": vp.name, "Category": vp.category, "Brand": vp.brand,
+                         "Price (₹)": vp.price, "Stock": vp.quantity_in_warehouse}
+                        for vp in valid_products]
         st.dataframe(pd.DataFrame(preview_data), use_container_width=True, hide_index=True)
-        st.info("🔄 Click 'Refresh Data' in the sidebar to see all products updated in the table above!")
+        st.info("🔄 Click 'Refresh Data' in the sidebar to see updated products!")
 
     except Exception as e:
         st.error(f"❌ Something went wrong: {e}")
