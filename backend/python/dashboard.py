@@ -6,7 +6,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import sys
+import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+load_dotenv()
 
 # Add project root to path so we can import our models
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -62,7 +66,6 @@ def semantic_search(query, embeddings, names, top_k=5, model_name="all-MiniLM-L6
     query_vec = _model.encode([query])[0]
     scores = [(names[i], cosine_similarity(query_vec, embeddings[i])) for i in range(len(names))]
     scores.sort(key=lambda x: x[1], reverse=True)
-    # Filter out results below minimum threshold
     scores = [s for s in scores if s[1] >= 0.35]
     return scores[:top_k]
 
@@ -109,31 +112,25 @@ def get_all_categories():
 st.sidebar.title("🔧 Controls")
 st.sidebar.markdown("---")
 
-# Refresh button
 if st.sidebar.button("🔄 Refresh Data"):
     st.cache_data.clear()
     st.rerun()
 
-# Filter by category
 st.sidebar.subheader("Filter Products")
 categories = get_all_categories()
 category_options = ["All"] + [c.title for c in categories]
 selected_category = st.sidebar.selectbox("Category", category_options)
 
-# Filter by brand
 brand_filter = st.sidebar.text_input("Brand contains")
 
-# Filter by price
 st.sidebar.subheader("Price Range")
 min_price = st.sidebar.number_input("Min Price", min_value=0, value=0)
 max_price = st.sidebar.number_input("Max Price", min_value=0, value=1000000)
 
 # ─── MAIN CONTENT ──────────────────────────────────────────────
 
-# Load products
 df = get_all_products()
 
-# Apply filters
 if not df.empty:
     if selected_category != "All":
         df = df[df["Category"] == selected_category]
@@ -172,16 +169,14 @@ else:
 
 st.markdown("---")
 
-# ─── TASK 5: SEMANTIC SEARCH ───────────────────────────────────
+# ─── SEMANTIC SEARCH ───────────────────────────────────────────
 st.subheader("🧠 Semantic Search")
 st.markdown("Search products by **meaning** — not just keywords!")
 
-
 semantic_query = st.text_input(
-        "Search query",
-        placeholder="e.g. 'wireless audio device', 'something to wear', 'mobile phone'"
-    )
-
+    "Search query",
+    placeholder="e.g. 'wireless audio device', 'something to wear', 'mobile phone'"
+)
 
 if semantic_query:
     with st.spinner("🔍 Searching..."):
@@ -209,7 +204,7 @@ if semantic_query:
 
 st.markdown("---")
 
-# ─── ADVANCED 1: FIND SIMILAR PRODUCTS ─────────────────────────
+# ─── FIND SIMILAR PRODUCTS ─────────────────────────────────────
 st.subheader("🔁 Find Similar Products")
 st.markdown("Select any product and find the most similar items in your inventory!")
 
@@ -221,7 +216,6 @@ if all_product_names:
         all_product_names,
         key="similar_product_select"
     )
-    
 
     if st.button("🔍 Find Similar Products"):
         with st.spinner("Finding similar products..."):
@@ -231,14 +225,12 @@ if all_product_names:
                 idx = names.index(selected_product_name)
                 selected_vec = embeddings[idx]
 
-                # Calculate similarity with all other products
                 similarities = []
                 for i, name in enumerate(names):
                     if name != selected_product_name:
                         score = cosine_similarity(selected_vec, embeddings[i])
                         similarities.append((name, score, i))
 
-                # Sort by score
                 similarities.sort(key=lambda x: x[1], reverse=True)
                 similarities = [s for s in similarities if s[1] >= 0.5]
                 top_similar = similarities[:50]
@@ -378,7 +370,7 @@ else:
 
 st.markdown("---")
 
-# ─── ADVANCED: SCENARIO SELECTOR ───────────────────────────────
+# ─── SCENARIO SELECTOR ─────────────────────────────────────────
 st.subheader("🎯 AI Scenario Selector")
 st.markdown("Choose a warehouse scenario and let AI populate the database with relevant products!")
 
@@ -418,14 +410,11 @@ num_products = st.slider("How many products to generate?", min_value=5, max_valu
 if st.button("🚀 Generate & Save Products", type="primary"):
     try:
         from groq import Groq
-        from dotenv import load_dotenv
         from pydantic import BaseModel, field_validator
         from typing import Optional
         from datetime import datetime, timezone
-        import os
         import json
 
-        load_dotenv()
         client = Groq(api_key=os.getenv("GROQ_API_KEY"))
 
         all_categories = get_all_categories()
@@ -534,3 +523,262 @@ Rules: Return ONLY a valid JSON array, no explanation, no markdown, no extra tex
 
     except Exception as e:
         st.error(f"❌ Something went wrong: {e}")
+
+st.markdown("---")
+
+# ─── ASK THE EXPERT (RAG + MONGODB + LANGSMITH) ────────────────
+st.subheader("🤖 Ask the Expert")
+st.markdown("Ask anything about **warranties, return policies, stock levels, or vendor info** — powered by RAG + Live Database!")
+
+# ── Langsmith setup (module level) ─────────────────────────────
+os.environ["LANGCHAIN_TRACING_V2"] = "true"
+os.environ["LANGCHAIN_API_KEY"] = os.getenv("LANGSMITH_API_KEY", "")
+os.environ["LANGCHAIN_PROJECT"] = "inventory-rag-week8"
+
+from langsmith import traceable
+
+# ── RAG Setup (cached) ─────────────────────────────────────────
+@st.cache_resource
+def setup_rag():
+    """Load and chunk documents, embed and store in Chromadb — cached"""
+    import chromadb
+    from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+    notebooks_path = Path(__file__).resolve().parent / "notebooks"
+
+    files = {
+        "product_manual": "product_manual.txt",
+        "return_policy": "return_policy.txt",
+        "vendor_faq": "vendor_faq.txt"
+    }
+
+    raw_docs = []
+    for doc_name, filename in files.items():
+        filepath = notebooks_path / filename
+        if filepath.exists():
+            with open(filepath, "r", encoding="utf-8") as f:
+                content = f.read()
+            raw_docs.append({"content": content, "source": doc_name})
+
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500,
+        chunk_overlap=50,
+        separators=["\n\n", "\n", ".", " "]
+    )
+
+    all_chunks = []
+    for doc in raw_docs:
+        chunks = splitter.split_text(doc["content"])
+        for chunk in chunks:
+            all_chunks.append({"text": chunk, "source": doc["source"]})
+
+    rag_model = SentenceTransformer("all-MiniLM-L6-v2")
+    texts = [c["text"] for c in all_chunks]
+    sources = [c["source"] for c in all_chunks]
+    embeddings = rag_model.encode(texts).tolist()
+
+    chroma_client = chromadb.Client()
+    try:
+        chroma_client.delete_collection("inventory_docs")
+    except:
+        pass
+
+    collection = chroma_client.create_collection("inventory_docs")
+    collection.add(
+        documents=texts,
+        embeddings=embeddings,
+        metadatas=[{"source": s} for s in sources],
+        ids=[f"chunk_{i}" for i in range(len(all_chunks))]
+    )
+
+    return collection, rag_model
+
+# ── Traceable functions ─────────────────────────────────────────
+@traceable(name="retrieve_chunks")
+def retrieve_chunks(query, collection, rag_model, top_k=3):
+    """Retrieve relevant chunks from Chromadb"""
+    query_vec = rag_model.encode([query]).tolist()
+    results = collection.query(query_embeddings=query_vec, n_results=top_k)
+    chunks = []
+    for i in range(len(results["documents"][0])):
+        chunks.append({
+            "text": results["documents"][0][i],
+            "source": results["metadatas"][0][i]["source"]
+        })
+    return chunks
+
+@traceable(name="mongodb_product_lookup")
+def lookup_products_in_db(question):
+    """Search MongoDB for products mentioned in the question"""
+    all_products = list(Product.objects.all())
+    matched = []
+    q_lower = question.lower()
+    q_words = [w for w in q_lower.split() if len(w) > 2]  # ← fixed: min 2 chars not 3
+
+    for p in all_products:
+        product_name_lower = p.name.lower()
+        # Match if ANY word from question appears in product name
+        if any(word in product_name_lower for word in q_words):
+            try:
+                cat = p.category.title if p.category else "Unknown"
+            except:
+                cat = "Unknown"
+            matched.append({
+                "name": p.name,
+                "brand": p.brand,
+                "category": cat,
+                "price": float(str(p.price)),
+                "stock": p.quantity_in_warehouse
+            })
+
+    return matched[:5]
+
+@traceable(name="ask_expert", run_type="chain")
+def ask_expert(question, collection, rag_model):
+    """
+    Combined RAG + MongoDB pipeline with Langsmith tracing:
+    1. Retrieve relevant doc chunks
+    2. Lookup matching products in MongoDB
+    3. Build combined prompt
+    4. Send to Groq
+    5. Return grounded answer
+    """
+    from groq import Groq
+
+    # Step 1 — Retrieve doc chunks
+    chunks = retrieve_chunks(question, collection, rag_model, top_k=3)
+    doc_context = "\n\n".join([f"[{c['source']}]: {c['text']}" for c in chunks])
+
+    # Step 2 — Lookup MongoDB
+    matched_products = lookup_products_in_db(question)
+
+    if matched_products:
+        db_context = "Live inventory data from database:\n"
+        for p in matched_products:
+            status = "IN STOCK" if p["stock"] > 0 else "OUT OF STOCK"
+            db_context += (
+                f"- {p['name']} ({p['brand']}) | "
+                f"Category: {p['category']} | "
+                f"Price: ₹{p['price']} | "
+                f"Stock: {p['stock']} units ({status})\n"
+            )
+    else:
+        db_context = "No matching products found in live database for this query."
+
+    # Step 3 — Build combined prompt
+    prompt = f"""You are an expert assistant for a product inventory system.
+You have access to two sources of information:
+1. Documentation (warranties, return policies, vendor FAQ)
+2. Live database (current stock levels, prices)
+
+Answer the user's question using BOTH sources below.
+If stock info is available, always mention current stock levels.
+If warranty or policy info is available, always include it.
+Only use information from the sources provided — do not make anything up.
+If the answer is not in either source, say "I don't have information about this."
+
+--- DOCUMENTATION ---
+{doc_context}
+
+--- LIVE DATABASE ---
+{db_context}
+
+Question: {question}
+
+Answer:"""
+
+    # Step 4 — Send to Groq
+    @traceable(name="groq_llm_call", run_type="llm")
+    def call_groq(messages):
+        client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+        response = client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=messages,
+            temperature=0.1
+        )
+        return response.choices[0].message.content
+
+    answer = call_groq([{"role": "user", "content": prompt}])
+
+    return answer, chunks, matched_products
+
+# ── Chat Interface ──────────────────────────────────────────────
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+
+with st.spinner("⏳ Loading knowledge base..."):
+    try:
+        collection, rag_model = setup_rag()
+        rag_ready = True
+    except Exception as e:
+        st.error(f"❌ Could not load knowledge base: {e}")
+        rag_ready = False
+
+if rag_ready:
+    # Display chat history
+    for chat in st.session_state.chat_history:
+        with st.chat_message("user"):
+            st.write(chat["question"])
+        with st.chat_message("assistant"):
+            st.write(chat["answer"])
+            col1, col2 = st.columns(2)
+            with col1:
+                with st.expander("📄 Doc sources used"):
+                    for chunk in chat["chunks"]:
+                        st.caption(f"[{chunk['source']}] {chunk['text'][:200]}...")
+            with col2:
+                with st.expander("🗄️ Live DB data used"):
+                    if chat["products"]:
+                        for p in chat["products"]:
+                            status = "✅ In Stock" if p["stock"] > 0 else "❌ Out of Stock"
+                            st.caption(f"{p['name']} — {p['stock']} units {status}")
+                    else:
+                        st.caption("No matching products found in DB")
+
+    # Chat input
+    user_question = st.chat_input(
+        "Ask anything — e.g. 'Is iPhone 14 in stock and what is its warranty?'"
+    )
+
+    if user_question:
+        with st.chat_message("user"):
+            st.write(user_question)
+
+        with st.chat_message("assistant"):
+            with st.spinner("🔍 Searching docs + live database..."):
+                try:
+                    answer, chunks, products = ask_expert(
+                        user_question, collection, rag_model
+                    )
+                    st.write(answer)
+
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        with st.expander("📄 Doc sources used"):
+                            for chunk in chunks:
+                                st.caption(f"[{chunk['source']}] {chunk['text'][:200]}...")
+                    with col2:
+                        with st.expander("🗄️ Live DB data used"):
+                            if products:
+                                for p in products:
+                                    status = "✅ In Stock" if p["stock"] > 0 else "❌ Out of Stock"
+                                    st.caption(f"{p['name']} — {p['stock']} units {status}")
+                            else:
+                                st.caption("No matching products found in DB")
+
+                    st.session_state.chat_history.append({
+                        "question": user_question,
+                        "answer": answer,
+                        "chunks": chunks,
+                        "products": products
+                    })
+                except Exception as e:
+                    st.error(f"❌ Error: {e}")
+
+    if st.session_state.chat_history:
+        if st.button("🗑️ Clear Chat History"):
+            st.session_state.chat_history = []
+            st.rerun()
+
+    st.caption("💡 Answers combine live stock data from MongoDB + warranty/policy info from documents.")
+    st.caption("🔭 All queries are traced in Langsmith under inventory-rag-week8 project.")

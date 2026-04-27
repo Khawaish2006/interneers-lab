@@ -1,0 +1,146 @@
+VENDOR & SUPPLIER FAQ
+=====================
+Last Updated: April 2026
+This document answers common questions from vendors, suppliers, and business partners.
+
+======================================
+ORDERING & MINIMUM QUANTITIES
+======================================
+
+Q: What is the minimum order quantity (MOQ)?
+A: Minimum order is 10 units per product for standard orders. Some products like electronics have a MOQ of 5 units. Bulk pricing starts at 100 units.
+
+Q: Can I place a mixed order with multiple products?
+A: Yes, mixed orders are accepted. Each product in the order must meet its individual MOQ. Total order value must be at least ₹10,000 for mixed orders.
+
+Q: Is there a maximum order limit?
+A: No maximum limit for most products. Orders above 500 units require advance notice of 7 business days for production and logistics planning.
+
+Q: How do I place a bulk order?
+A: Contact your assigned account manager with product names, quantities, and delivery address. Bulk orders above 100 units receive a 10-15% discount depending on product category.
+
+Q: Can I order products not listed in the catalog?
+A: Custom orders are available for clothing and kitchen essentials with a minimum of 200 units and 30 day lead time. Contact procurement team for details.
+
+======================================
+PRICING & PAYMENT
+======================================
+
+Q: What payment terms are available?
+A: New vendors require 100% upfront payment. Verified vendors with 6 month history qualify for Net 30 payment terms. Vendors with 1 year history qualify for Net 45.
+
+Q: Are there any bulk discounts?
+A: Yes. 100-199 units: 10% discount. 200-499 units: 12% discount. 500+ units: 15% discount. Electronics discounts are capped at 8% regardless of quantity.
+
+Q: What currencies are accepted?
+A: Indian Rupees (INR) for domestic orders. USD and EUR accepted for international orders with applicable conversion rates.
+
+Q: Are prices inclusive of GST?
+A: All listed prices are exclusive of GST. Applicable GST rates vary by product category. GST invoice provided with every order.
+
+Q: What happens if prices change after order placement?
+A: Confirmed orders are honored at the price at time of order placement. Price changes apply only to new orders.
+
+======================================
+DELIVERY & SHIPPING
+======================================
+
+Q: How long does standard delivery take?
+A: Standard delivery takes 5-7 business days within India. Metro cities (Mumbai, Delhi, Bangalore, Chennai) receive delivery in 3-5 business days.
+
+Q: Is express delivery available?
+A: Yes. Express delivery takes 2-3 business days at additional cost. Same day delivery available in select cities for orders placed before 10 AM.
+
+Q: Who handles the shipping?
+A: We partner with Blue Dart, Delhivery, and FedEx for domestic shipments. International shipments handled via DHL and FedEx International.
+
+Q: What is the shipping cost?
+A: Free shipping on orders above ₹5,000. Orders below ₹5,000 incur flat ₹150 shipping fee. Express delivery charged separately based on weight and location.
+
+Q: How are large items like TVs and appliances shipped?
+A: Large electronics and appliances are shipped via specialized freight carriers with installation support available in select cities.
+
+Q: Can I track my order?
+A: Yes. Tracking number provided via email within 24 hours of dispatch. Track on our website or directly on carrier website.
+
+Q: What if delivery is delayed?
+A: Contact support if delivery exceeds estimated date by more than 2 business days. Compensation in form of store credit provided for delays beyond 5 business days.
+
+======================================
+DAMAGED SHIPMENTS
+======================================
+
+Q: How do I report a damaged shipment?
+A: Report damaged shipments within 48 hours of delivery. Email photos of damaged packaging and product to support@inventory.com with order number.
+
+Q: What happens after I report damage?
+A: Our team reviews photos within 24 hours. Approved claims result in replacement shipment within 3-5 business days at no additional cost.
+
+Q: What if only part of the shipment is damaged?
+A: Partial damage claims are accepted. Only damaged items are replaced. Undamaged items in same shipment do not qualify for replacement.
+
+Q: Who bears the cost of return shipping for damaged goods?
+A: Return shipping for damaged or defective goods is fully covered by us. We provide a prepaid shipping label via email.
+
+======================================
+RETURNS & RESTOCKING
+======================================
+
+Q: What is the restocking fee for returned items?
+A: A 10% restocking fee applies to non-defective returned items. No restocking fee for defective or damaged item returns.
+
+Q: How long does the return process take?
+A: Standard returns processed within 7 business days. Bulk returns (50+ units) take 14 business days. Refund issued within 3 business days after return is processed.
+
+Q: Can I return seasonal or clearance items?
+A: Seasonal items marked as Final Sale cannot be returned. Clearance items can be returned within 15 days if defective only.
+
+Q: What is the process for warranty claims?
+A: Submit warranty claims via email to warranty@inventory.com with proof of purchase, product serial number, and description of defect. Response within 48 hours.
+
+======================================
+PRODUCT AVAILABILITY & STOCK
+======================================
+
+Q: How are out of stock items handled?
+A: Out of stock items are automatically backordered and shipped when available. Customer notified via email with estimated restock date.
+
+Q: Can I reserve stock for future orders?
+A: Stock reservation available for verified vendors with minimum 3 month relationship. Reservation requires 20% advance payment and valid for 30 days.
+
+Q: How often is inventory updated?
+A: Inventory updated in real time on our system. Low stock alerts sent to registered vendors when stock falls below 20 units.
+
+Q: What happens if a product is discontinued?
+A: Vendors notified 30 days in advance of product discontinuation. Outstanding orders fulfilled before discontinuation. Alternatives suggested where possible.
+
+Q: Are product specifications subject to change?
+A: Manufacturers may update specifications without notice. We update our product manual within 7 days of receiving manufacturer updates.
+
+======================================
+VENDOR REGISTRATION & ACCOUNT
+======================================
+
+Q: How do I become a registered vendor?
+A: Complete vendor registration form on our website. Submit GST certificate, business registration, and bank details. Approval within 3-5 business days.
+
+Q: What are the benefits of being a registered vendor?
+A: Registered vendors receive: priority customer support, Net 30 payment terms after 6 months, early access to new products, bulk discounts, and dedicated account manager.
+
+Q: How do I update my account details?
+A: Login to vendor portal and update details under Account Settings. Changes to bank details require verification and take 2-3 business days to process.
+
+Q: Who is my account manager?
+A: Account manager details available in your vendor portal dashboard. Account manager assigned after first successful order completion.
+
+======================================
+CONTACT & SUPPORT
+======================================
+
+Vendor Support Email: vendors@inventory.com
+General Support Email: support@inventory.com
+Warranty Claims: warranty@inventory.com
+Returns: returns@inventory.com
+Phone: Monday to Friday, 9 AM to 6 PM IST
+Emergency Support: Available 24/7 for orders above ₹1,00,000
+Response Time: Within 24 hours on business days, 48 hours on weekends
